@@ -11,6 +11,7 @@ import {
   AggregateBudgetConfig,
   computeAggregateDiffs,
 } from "./diff";
+import { comparePercentageToLimit, percentageLimitText } from "./percentage";
 import * as crypto from "crypto";
 
 // ---------------------------------------------------------------------------
@@ -270,7 +271,16 @@ function evaluateRule(
 
   const allowedPct = typeof rule === "number" ? rule : parseAllowPct(ruleStr);
   if (allowedPct !== null) {
-    if (diff.pct === null || diff.pct > allowedPct) {
+    let exceeded = diff.pct === null;
+    if (!exceeded) {
+      if (diff.delta === null || diff.base.consumed === null)
+        throw new Error(
+          `Cannot evaluate percentage rule ${ruleStr} for ${diff.key}: missing consumed value`,
+        );
+      exceeded =
+        comparePercentageToLimit(diff.delta, diff.base.consumed, rule) > 0;
+    }
+    if (exceeded) {
       const pctStr = diff.pct === null ? "Infinity" : diff.pct.toFixed(2);
       return {
         contract_id: contractId,
@@ -279,7 +289,7 @@ function evaluateRule(
         delta: diff.delta,
         pct: diff.pct,
         rule: ruleStr,
-        message: `${diff.key} increased by ${pctStr}% (limit ${allowedPct}%)`,
+        message: `${diff.key} increased by ${pctStr}% (limit ${percentageLimitText(rule)}%)`,
       };
     }
     return null;
@@ -428,7 +438,20 @@ export function enforceThresholds(
         const allowedPct =
           typeof rule === "number" ? rule : parseAllowPct(ruleStr);
         if (allowedPct !== null) {
-          if (aggMetric.pct === null || aggMetric.pct > allowedPct) {
+          let exceeded = aggMetric.pct === null;
+          if (!exceeded) {
+            if (aggMetric.delta === null || aggMetric.base_consumed === null)
+              throw new Error(
+                `Cannot evaluate aggregate percentage rule ${ruleStr} for ${metricKey}: missing consumed value`,
+              );
+            exceeded =
+              comparePercentageToLimit(
+                aggMetric.delta,
+                aggMetric.base_consumed,
+                rule,
+              ) > 0;
+          }
+          if (exceeded) {
             const pctStr =
               aggMetric.pct === null ? "Infinity" : aggMetric.pct.toFixed(2);
             violations.push({
@@ -438,7 +461,7 @@ export function enforceThresholds(
               pct: aggMetric.pct,
               rule: ruleStr,
               rule_source: `aggregates.${name}.thresholds.${metricKey}`,
-              message: `${metricKey} increased by ${pctStr}% (limit ${allowedPct}%)`,
+              message: `${metricKey} increased by ${pctStr}% (limit ${percentageLimitText(rule)}%)`,
             });
           }
         }

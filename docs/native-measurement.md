@@ -206,9 +206,13 @@ Existing config files are validated before measurement: unknown keys/rules, wron
 types, negative/nonfinite caps and malformed percentages fail. A nonignored
 function policy without any matched case fails explicitly. `ignore` is an opt-out;
 it does not establish a comparison. Valid numeric caps and named decimal caps
-remain supported. Downstream consumers must treat `fail` with `{}` diff JSON as
-an unsuccessful comparison, not a passing report. Error job summaries explain
-that no passing comparison/policy result was established.
+remain supported. Percentage-policy decisions are exact: decimal limits are
+parsed as rationals and compared with safe-integer consumption counters, equality
+passes, and unsafe counters or malformed decimals fail closed. Displayed
+percentages remain rounded presentation values. Downstream consumers must treat
+`fail` with `{}` diff JSON as an unsuccessful comparison, not a passing report.
+Error job summaries explain that no passing comparison/policy result was
+established.
 
 See [Stage 1C proof](experiments/fail-closed/verification.json). The local live
 harness also injects checkout/worktree/build failures, removes BASE fixtures/WASM,

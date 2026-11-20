@@ -244,8 +244,18 @@ other arbitrary text.
 Relative rules accept `strict_zero_tolerance`, `allow_X_percent_increase`, a
 nonnegative numeric percentage, or `ignore`. Rules are scoped by function name
 and apply to every matching contract/case with that function. Global CPU/memory
-percentage rules and all-metric strict policy are also supported. Absolute caps
-are configured under `[limits.global]` or `[limits.functions.hello]`:
+percentage rules and all-metric strict policy are also supported.
+
+Percentage limits are decided with exact integer/decimal arithmetic on
+`base.consumed` and `head.consumed - base.consumed`. Decimal rule text is parsed
+as an exact rational; numeric TOML values use their canonical shortest decimal
+form (for example, `0.1` means exactly one tenth). Equality passes and any
+strictly greater increase fails. Percentages in reports and violation messages
+are rounded display values and never decide pass/fail. A zero baseline with a
+positive HEAD still violates finite limits as `+Infinity`. Percentage rules fail
+closed on unsafe or non-integer consumption counters.
+
+Absolute caps are configured under `[limits.global]` or `[limits.functions.hello]`:
 
 ```toml
 [limits.functions.hello]

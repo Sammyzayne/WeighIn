@@ -71664,6 +71664,60 @@ Setup of ${contractSpec.logical_id} failed; aborted dependents: ${aborted2.map((
 
 // src/threshold.ts
 var TOML = __toESM(require_toml());
+
+// src/percentage.ts
+var DECIMAL_PATTERN = /^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+var RULE_PATTERN = /^allow_(\d+(?:\.\d+)?)_percent_increase$/;
+var MAX_DECIMAL_SCALE = 4096;
+function parsePercentageLimit(value) {
+  let text;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) return null;
+    text = String(value);
+  } else if (typeof value === "string") {
+    const named = value.match(RULE_PATTERN);
+    if (!named) return null;
+    text = named[1];
+  } else {
+    return null;
+  }
+  const match = text.match(DECIMAL_PATTERN);
+  if (!match) return null;
+  const whole = match[1];
+  const fraction = match[2] ?? "";
+  const exponent = Number(match[3] ?? "0");
+  if (!Number.isSafeInteger(exponent) || fraction.length > MAX_DECIMAL_SCALE || Math.abs(exponent) > MAX_DECIMAL_SCALE)
+    return null;
+  const scale = fraction.length - exponent;
+  if (Math.abs(scale) > MAX_DECIMAL_SCALE) return null;
+  const digits = `${whole}${fraction}`.replace(/^0+(?=\d)/, "");
+  let numerator = BigInt(digits);
+  let denominator = 1n;
+  if (scale > 0) denominator = 10n ** BigInt(scale);
+  else if (scale < 0) numerator *= 10n ** BigInt(-scale);
+  return { numerator, denominator, text };
+}
+function percentageLimitText(value) {
+  return parsePercentageLimit(value)?.text ?? String(value);
+}
+function comparePercentageToLimit(delta, base, limit) {
+  const parsed = parsePercentageLimit(limit);
+  if (!parsed) throw new Error(`Invalid percentage limit: ${String(limit)}`);
+  if (!Number.isSafeInteger(delta))
+    throw new Error(
+      `Cannot evaluate percentage policy with unsafe delta ${delta}`
+    );
+  if (!Number.isSafeInteger(base) || base < 0)
+    throw new Error(
+      `Cannot evaluate percentage policy with unsafe baseline ${base}`
+    );
+  if (base === 0) return delta === 0 ? 0 : delta > 0 ? 1 : -1;
+  const left = BigInt(delta) * 100n * parsed.denominator;
+  const right = parsed.numerator * BigInt(base);
+  return left > right ? 1 : left < right ? -1 : 0;
+}
+
+// src/threshold.ts
 var crypto4 = __toESM(require("crypto"));
 var percentage = external_exports.number().finite().nonnegative();
 var ruleSchema = external_exports.union([
@@ -71762,7 +71816,15 @@ function evaluateRule(rule, diff, contractId, functionName) {
   }
   const allowedPct = typeof rule === "number" ? rule : parseAllowPct(ruleStr);
   if (allowedPct !== null) {
-    if (diff.pct === null || diff.pct > allowedPct) {
+    let exceeded = diff.pct === null;
+    if (!exceeded) {
+      if (diff.delta === null || diff.base.consumed === null)
+        throw new Error(
+          `Cannot evaluate percentage rule ${ruleStr} for ${diff.key}: missing consumed value`
+        );
+      exceeded = comparePercentageToLimit(diff.delta, diff.base.consumed, rule) > 0;
+    }
+    if (exceeded) {
       const pctStr = diff.pct === null ? "Infinity" : diff.pct.toFixed(2);
       return {
         contract_id: contractId,
@@ -71771,7 +71833,7 @@ function evaluateRule(rule, diff, contractId, functionName) {
         delta: diff.delta,
         pct: diff.pct,
         rule: ruleStr,
-        message: `${diff.key} increased by ${pctStr}% (limit ${allowedPct}%)`
+        message: `${diff.key} increased by ${pctStr}% (limit ${percentageLimitText(rule)}%)`
       };
     }
     return null;
@@ -71876,7 +71938,19 @@ function enforceThresholds(diff, config3) {
         }
         const allowedPct = typeof rule === "number" ? rule : parseAllowPct(ruleStr);
         if (allowedPct !== null) {
-          if (aggMetric.pct === null || aggMetric.pct > allowedPct) {
+          let exceeded = aggMetric.pct === null;
+          if (!exceeded) {
+            if (aggMetric.delta === null || aggMetric.base_consumed === null)
+              throw new Error(
+                `Cannot evaluate aggregate percentage rule ${ruleStr} for ${metricKey}: missing consumed value`
+              );
+            exceeded = comparePercentageToLimit(
+              aggMetric.delta,
+              aggMetric.base_consumed,
+              rule
+            ) > 0;
+          }
+          if (exceeded) {
             const pctStr = aggMetric.pct === null ? "Infinity" : aggMetric.pct.toFixed(2);
             violations.push({
               aggregate_id: name,
@@ -71885,7 +71959,7 @@ function enforceThresholds(diff, config3) {
               pct: aggMetric.pct,
               rule: ruleStr,
               rule_source: `aggregates.${name}.thresholds.${metricKey}`,
-              message: `${metricKey} increased by ${pctStr}% (limit ${allowedPct}%)`
+              message: `${metricKey} increased by ${pctStr}% (limit ${percentageLimitText(rule)}%)`
             });
           }
         }
