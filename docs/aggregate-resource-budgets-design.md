@@ -141,9 +141,9 @@ Configured via `[aggregates.<name>.thresholds]`.
 - `strict_zero_tolerance`: Any increase ($\Delta > 0$) emits a violation.
 - `allow_N_percent_increase`:
   - **Zero baseline**: When $\sum \text{base.consumed} = 0$ and $\Delta > 0$, the relative increase is undefined ($+\infty\%$). The evaluation fails closed with:
-    `"${metric} increased by Infinity% (limit ${allowedPct}%)"`.
-  - **Non-zero baseline**: Evaluated against the aggregate percentage delta: $\text{pct} = \frac{\Delta}{\sum \text{base.consumed}} \times 100$. If $\text{pct} > N$, a violation is emitted:
-    `"${metric} increased by ${pct.toFixed(2)}% (limit ${allowedPct}%)"`.
+    `"${metric} increased by Infinity% (limit ${limitText}%)"`.
+  - **Non-zero baseline**: Pass/fail is decided by exact integer/decimal comparison, $100 \times \Delta > N \times \sum \text{base.consumed}$, where $N$ is parsed from the rule's decimal text (numeric literals use their canonical shortest decimal form). Equality passes. The displayed $\text{pct} = \frac{\Delta}{\sum \text{base.consumed}} \times 100$ is a float rounded only for reports and messages; it never decides the result. A violation is emitted:
+    `"${metric} increased by ${pct.toFixed(2)}% (limit ${limitText}%)"`.
 - `ignore`: Bypasses threshold enforcement for that metric on this aggregate.
 
 ### Policy Interaction Without Double-Counting

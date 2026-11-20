@@ -159,15 +159,19 @@ only retain their legacy runtime-address matching against other legacy records.
 
 Comparable deltas are HEAD minus BASE. Positive values mark regressions;
 negative values mark improvements. A zero baseline has null percentage, not an
-invented finite percentage. Unavailable comparisons have null delta/percentage
-and a reason. New/removed contracts/cases are listed separately. The Action
-requires at least one matched benchmark, even with no thresholds.
+invented finite percentage. Percentage fields are floating display values;
+policy decisions use exact integer/decimal comparison in
+`src/percentage.ts`. Unavailable comparisons have null delta/percentage and a
+reason. New/removed contracts/cases are listed separately. The Action requires
+at least one matched benchmark, even with no thresholds.
 
 `src/threshold.ts::enforceThresholds` applies HEAD's validated per-function and
 global relative rules and absolute HEAD caps. Per-function rules affect every
-matching case of that function. Requiring an unavailable metric, exceeding a
-cap/relative rule, or configuring a nonignored unmatched function is a failure.
-Explicit `ignore` opts out. Numeric caps equal to HEAD consumption pass.
+matching case of that function. Relative limits compare decimal rule text
+exactly against safe-integer consumption counters; equality passes and unsafe
+counters fail closed. Requiring an unavailable metric, exceeding a cap/relative
+rule, or configuring a nonignored unmatched function is a failure. Explicit
+`ignore` opts out. Numeric caps equal to HEAD consumption pass.
 
 ## Reporting and Action outcome
 
